@@ -1,106 +1,90 @@
-// Create Marker Color function
-function markerColor(mag) {
+ var link = "https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/all_day.geojson";
 
-  if (mag <= 4.75) {
-      return "#1635D9";
-  } else if (4.75 < mag & mag <= 5.00) {
-      return "#13DECE";
-  } else if (5.00 < mag & mag <= 5.25) {
-      return "#12E510";
-  } else if (5.25 < mag & mag <= 5.50) {
-      return "#DCEB0C";
-  } else {
-      return "#F02908";
-  };
-}
+d3.json(link).then(function(data){
+
+    console.log(data);
+});
 
 
-// Create the createMap function
-function createMap(earthquakes) {
+var myMap = L.map("map", {
+    center: [40.7, -94.5],
+    zoom: 3
+});
 
-  // Create two tile layer options that will be the background of our map
-  var satelitemap = L.tileLayer("https://api.tiles.mapbox.com/v4/{id}/{z}/{x}/{y}.png?access_token={accessToken}", {
-    attribution: "Map data &copy; <a href=\"https://www.openstreetmap.org/\">OpenStreetMap</a> contributors, <a href=\"https://creativecommons.org/licenses/by-sa/2.0/\">CC-BY-SA</a>, Imagery © <a href=\"https://www.mapbox.com/\">Mapbox</a>",
-    maxZoom: 18,
-    id: "mapbox.satellite",
-    accessToken: API_KEY
-  });
+  L.tileLayer("https://api.mapbox.com/styles/v1/{id}/tiles/{z}/{x}/{y}?access_token={accessToken}", {
+        attribution: "© <a href='https://www.mapbox.com/about/maps/'>Mapbox</a> © <a href='http://www.openstreetmap.org/copyright'>OpenStreetMap</a> <strong><a href='https://www.mapbox.com/map-feedback/' target='_blank'>Improve this map</a></strong>",
+        tileSize: 512,
+        maxZoom: 18,
+        zoomOffset: -1,
+        id: "mapbox/light-v10",
+        accessToken: API_KEY
+    }).addTo(myMap);
 
-  var darkmap = L.tileLayer("https://api.tiles.mapbox.com/v4/{id}/{z}/{x}/{y}.png?access_token={accessToken}", {
-    attribution: "Map data &copy; <a href=\"https://www.openstreetmap.org/\">OpenStreetMap</a> contributors, <a href=\"https://creativecommons.org/licenses/by-sa/2.0/\">CC-BY-SA</a>, Imagery © <a href=\"https://www.mapbox.com/\">Mapbox</a>",
-    maxZoom: 18,
-    id: "mapbox.dark",
-    accessToken: API_KEY
-  });
 
-  // Create a baseMaps object to hold the layers
-  var baseMaps = {
-    "Satelite Map": satelitemap,
-    "Dark Map": darkmap
-  };
+d3.json(link).then(function(data) {
 
-  // Create an overlayMaps object to hold the earthquakes layer
-  var overlayMaps = {
-    "Earthquakes": earthquakes
-  };
+  function styleInfo(feature) {
+    return {
+      opacity: 1,
+      fillOpacity: 1,
+      fillColor: getColor(feature.geometry.coordinates[2]),
+      radius: getRadiussize(feature.properties.mag),
+      color: "#ffffff",
+      stroke: true,
+      weight: 0.9
+    };
+  }
+  function getColor(progress) {
+    const thresholds = [10, 30, 50, 70, 90];
+    const colors = ["LimeGreen","Yellow","Orange","DarkOrange","Crimson", "FireBrick"]
+    return colors.find((col, index) => {
+        return index >= thresholds.length || progress < thresholds[index];
+    });
+  }
 
-  // Creating map, giving it the satelite map and earthquakes layers to display on load
-  var myMap = L.map("map", {
-    center: [0, 0],
-    zoom: 2,
-    layers: [satelitemap, earthquakes]
-  });
 
-  // Create a layer control, pass in the baseMaps and overlayMaps. Add the layer control to the map
-  L.control.layers(baseMaps, overlayMaps, {
-    collapsed: false
+  function getRadiussize(magnitude) {
+  return magnitude * 4;
+  }
+
+  L.geoJson(data, {
+    pointToLayer: function(feature, latlng) {
+      return L.circleMarker(latlng);
+    },
+    style: styleInfo,
+    onEachFeature: function(feature, layer) {
+      layer.bindPopup(
+        "Magnitude: "
+          + feature.properties.mag
+          + "<br>Depth: "
+          + feature.geometry.coordinates[2]
+          + "<br>Location: "
+          + feature.properties.place
+      );
+    }
   }).addTo(myMap);
 
-
-  // Create legend
   var legend = L.control({position: 'bottomright'});
 
-  legend.onAdd = () => {
-    var div = L.DomUtil.create('div', 'info legend');
-    var magnitudes = [4.75, 5.0, 5.25, 5.5, 5.75];
+legend.onAdd = function (map) {
 
-    magnitudes.forEach(m => {
-      var range = `${m} - ${m+0.25}`;
-      if (m >= 5.75) {range = `${m}+`}
-      var html = `<div class="legend-item">
-            <div style="height: 25px; width: 25px; background-color:${markerColor(m)}"> </div>
-            <div class=legend-text>Magnitude:- <strong>${range}</strong></div>
-        </div>`
-      div.innerHTML += html
-    });
+    var div = L.DomUtil.create('div', 'info legend'),
+            grades = [-10, 10, 30, 50, 70, 90],
+            legendInfo = "<h3>Depth</h3>";
+            legend = []
+            div.innerHTML = legendInfo;
+
+
+        for (var i = 0; i < grades.length; i++) {
+            div.innerHTML += '<i style="background:' + getColor(grades[i] + 1) + '"></i> ' +
+                grades[i] + (grades[i + 1] ? '&ndash;' + grades[i + 1] + '<br>' : '+');
+        }
+
     return div;
-  };
-  legend.addTo(myMap);
-}
+};
 
-// Create Markers function
-function createMarkers(response) {
+legend.addTo(myMap);
 
-    var earthquakes = response.features;
-    var earthquakeMarkers = []
+});
 
-    for (var index = 0; index < earthquakes.length; index++) {
-        var earthquake = earthquakes[index];
-
-        var marker = L.circleMarker([ earthquake.geometry.coordinates[1], earthquake.geometry.coordinates[0] ], {
-                radius: earthquake.properties.mag * 2,
-                fillColor: markerColor(earthquake.properties.mag),
-                fillOpacity: 0.75,
-                stroke: false
-            }
-            ).bindPopup("<h4>" + earthquake.properties.place + "</h4><hr><p>" + new Date (earthquake.properties.time) + "</p>" + "<p><b>Magnitude: " +  earthquake.properties.mag + "<b></p>");
-
-        earthquakeMarkers.push(marker);
-    }
-    createMap(L.layerGroup(earthquakeMarkers));
-
-}
-
-
-// Perform an API call to USGS API to get earthquake data got earthquakes with a magnitude of 4.5+ in the past 30 days. Call createMarkers when complete.
-d3.json("https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/all_week.geojson", createMarkers);
+  
